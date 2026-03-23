@@ -1,0 +1,7 @@
+"customer_segment","customer_count","total_revenue","avg_customer_value","avg_order_frequency","avg_days_since_purchase","revenue_percentage"
+"Champions","961","5761563.66","5995.38","11.0","12","64.65"
+"Low Value","2091","1429025.77","683.42","1.5","137","16.04"
+"Loyal","505","959355.05","1899.71","5.2","54","10.77"
+"Hibernating High Value","187","501037.00","2679.34","5.3","124","5.62"
+"At Risk","284","165742.07","583.60","2.4","161","1.86"
+"Promising","310","94684.35","305.43","1.3","17","1.06"
