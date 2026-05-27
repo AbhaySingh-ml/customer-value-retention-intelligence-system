@@ -1,4 +1,4 @@
-# Customer & Revenue Intelligence System (SQL) 1
+# Customer & Revenue Intelligence System (SQL) 1 2
 
 A end-to-end SQL analytics project built on a real-world e-commerce dataset (~500K rows).  
 The goal is not just writing queries — but answering: **"How does this business make money, and what decisions should it take?"**
