@@ -169,4 +169,4 @@ Every query in this project answers a real business question, not just a technic
 
 ---
 
-*Database: PostgreSQL 18 | Tool: pgAdmin 4 | Dataset: UCI Machine Learning Repository*    1 2 3
+*Database: PostgreSQL 18 | Tool: pgAdmin 4 | Dataset: UCI Machine Learning Repository*    1 2
