@@ -1,94 +1,86 @@
 -- =========================================================
--- DATA CLEANING STEP
+-- MODULE 2: DATA CLEANING
 -- =========================================================
 -- Objective:
--- Create a cleaned version of the dataset by removing
--- invalid, incomplete, and non-revenue-generating records.
+-- Create a cleaned analytical table while preserving the
+-- original raw dataset.
 --
--- Why cleaning is required:
--- Raw transactional data contains:
--- - Missing customer IDs
--- - Product returns (negative quantity)
--- - Invalid prices
--- - Cancelled invoices
---
--- These distort revenue, customer segmentation, and analytics.
+-- Cleaning rules:
+-- 1. Remove rows with NULL customer_id
+-- 2. Remove rows with quantity <= 0
+-- 3. Remove rows with unit_price <= 0
+-- 4. Remove cancellation invoices beginning with 'C'
+-- 5. Add revenue = quantity * unit_price
 -- =========================================================
 
 
 -- =========================================================
--- STEP 1: CREATE CLEAN TABLE
+-- STEP 1: RECREATE CLEAN TABLE
 -- =========================================================
--- We create a new table instead of modifying raw data
--- to preserve original dataset (best practice in analytics)
+
+-- Keep the raw table unchanged.
+-- Recreating the table makes this script reproducible.
+
+DROP TABLE IF EXISTS online_retail_clean;
 
 CREATE TABLE online_retail_clean AS
-SELECT *
+SELECT
+    *
 FROM online_retail
-WHERE 
-    -- Remove rows with missing customer ID
-    -- Required for customer-level analysis (RFM, segmentation)
+WHERE
     customer_id IS NOT NULL
-
-    AND
-
-    -- Remove returns (negative or zero quantity)
-    -- Returns are not actual purchases
-    quantity > 0
-
-    AND
-
-    -- Remove invalid or free products
-    -- Revenue calculation requires positive price
-    unit_price > 0
-
-    AND
-
-    -- Remove cancelled invoices
-    -- Invoice numbers starting with 'C' indicate cancellations
-    invoice_no NOT LIKE 'C%';
+    AND quantity > 0
+    AND unit_price > 0
+    AND invoice_no NOT LIKE 'C%';
 
 
 -- =========================================================
--- STEP 2: VALIDATE CLEANING
+-- STEP 2: ADD DERIVED REVENUE
 -- =========================================================
--- Ensure all invalid records are removed
 
--- Check for NULL customer IDs
-SELECT COUNT(*) AS null_customers
-FROM online_retail_clean
-WHERE customer_id IS NULL;
-
--- Check for negative or zero quantity
-SELECT COUNT(*) AS invalid_quantity
-FROM online_retail_clean
-WHERE quantity <= 0;
-
--- Check for invalid prices
-SELECT COUNT(*) AS invalid_price
-FROM online_retail_clean
-WHERE unit_price <= 0;
-
-
--- =========================================================
--- STEP 3: ADD REVENUE COLUMN
--- =========================================================
 -- Revenue = Quantity × Unit Price
--- Precomputing this improves performance in future queries
 
 ALTER TABLE online_retail_clean
 ADD COLUMN revenue NUMERIC(12,2);
 
-
--- Populate revenue values
 UPDATE online_retail_clean
 SET revenue = quantity * unit_price;
 
 
 -- =========================================================
--- STEP 4: FINAL CHECK
+-- STEP 3: DATA QUALITY VALIDATION
 -- =========================================================
--- Confirm cleaned dataset size
 
-SELECT COUNT(*) AS cleaned_row_count
+SELECT
+    COUNT(*) AS clean_rows,
+
+    COUNT(*) FILTER (
+        WHERE customer_id IS NULL
+    ) AS null_customers,
+
+    COUNT(*) FILTER (
+        WHERE quantity <= 0
+    ) AS invalid_quantity,
+
+    COUNT(*) FILTER (
+        WHERE unit_price <= 0
+    ) AS invalid_price,
+
+    COUNT(*) FILTER (
+        WHERE invoice_no LIKE 'C%'
+    ) AS cancellations,
+
+    COUNT(*) FILTER (
+        WHERE revenue <= 0
+    ) AS invalid_revenue
+
+FROM online_retail_clean;
+
+
+-- =========================================================
+-- STEP 4: FINAL ROW COUNT
+-- =========================================================
+
+SELECT
+    COUNT(*) AS clean_row_count
 FROM online_retail_clean;

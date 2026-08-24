@@ -66,6 +66,7 @@ ORDER BY r_score DESC, f_score DESC, m_score DESC
 LIMIT 30;
 
 
+
 -- ## 3. Your Final Structure Should Look Like This
 -- ```
 -- .
@@ -93,3 +94,4 @@ LIMIT 30;
 --     ├── 06_rfm_analysis.sql
 --     ├── 06b_rfm_diagnostic.sql         ← new
 --     └── 07_country_analysis.sql
+-- ```

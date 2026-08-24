@@ -1,15 +1,21 @@
 -- =========================================================
--- MODULE 6: CUSTOMER-LEVEL RFM ANALYSIS
+-- MODULE 7: RFM SEGMENT SUMMARY
 -- =========================================================
 -- Purpose:
--- Calculate Recency, Frequency, Monetary value and
--- RFM scores for every customer.
+-- Aggregate customer-level RFM metrics into business
+-- segments for portfolio and business analysis.
 --
 -- Output grain:
--- One row per customer.
+-- One row per customer segment.
+--
+-- Note:
+-- This module independently reconstructs the customer-level
+-- RFM dataset so that the SQL script can be executed
+-- independently.
 -- =========================================================
 
-WITH customer_base AS (
+
+WITH customer_rfm AS (
 
     SELECT
         customer_id,
@@ -17,12 +23,13 @@ WITH customer_base AS (
         COUNT(DISTINCT invoice_no) AS frequency,
         SUM(revenue) AS monetary
 
-    FROM online_retail_clean
+    FROM public.online_retail_clean
 
     GROUP BY customer_id
 ),
 
-recency_calc AS (
+
+recency_calculated AS (
 
     SELECT
         customer_id,
@@ -33,19 +40,19 @@ recency_calc AS (
         EXTRACT(
             EPOCH FROM (
                 (SELECT MAX(invoice_date)
-                 FROM online_retail_clean)
+                 FROM public.online_retail_clean)
                 - last_purchase_date
             )
         ) / 86400 AS recency_days
 
-    FROM customer_base
+    FROM customer_rfm
 ),
 
-rfm_scores AS (
+
+rfm_scored AS (
 
     SELECT
         customer_id,
-        last_purchase_date,
         recency_days,
         frequency,
         monetary,
@@ -62,17 +69,17 @@ rfm_scores AS (
             ORDER BY monetary DESC
         ) AS m_score
 
-    FROM recency_calc
+    FROM recency_calculated
 ),
 
-rfm_segment AS (
+
+segmented_customers AS (
 
     SELECT
         customer_id,
-        last_purchase_date,
-        ROUND(recency_days, 0) AS recency_days,
+        recency_days,
         frequency,
-        ROUND(monetary, 2) AS monetary,
+        monetary,
         r_score,
         f_score,
         m_score,
@@ -104,20 +111,48 @@ rfm_segment AS (
             ELSE 'Low Value'
         END AS customer_segment
 
-    FROM rfm_scores
+    FROM rfm_scored
 )
 
+
 SELECT
-    customer_id,
-    last_purchase_date,
-    recency_days,
-    frequency,
-    monetary,
-    r_score,
-    f_score,
-    m_score,
-    customer_segment
+    customer_segment,
 
-FROM rfm_segment
+    COUNT(*) AS customer_count,
 
-ORDER BY monetary DESC;
+    ROUND(
+        SUM(monetary),
+        2
+    ) AS total_revenue,
+
+    ROUND(
+        AVG(monetary),
+        2
+    ) AS avg_customer_value,
+
+    ROUND(
+        AVG(frequency),
+        1
+    ) AS avg_order_frequency,
+
+    ROUND(
+        AVG(recency_days),
+        0
+    ) AS avg_days_since_purchase,
+
+    ROUND(
+        SUM(monetary) * 100.0 /
+        (
+            SELECT SUM(revenue)
+            FROM public.online_retail_clean
+        ),
+        2
+    ) AS revenue_percentage
+
+FROM segmented_customers
+
+GROUP BY customer_segment
+
+ORDER BY total_revenue DESC;
+
+-- this is a new update

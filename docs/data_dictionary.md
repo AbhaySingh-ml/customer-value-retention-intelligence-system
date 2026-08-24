@@ -1,76 +1,85 @@
 # Data Dictionary
 
 ## Project: Customer & Revenue Intelligence System
-**Database:** PostgreSQL 18  
-**Schema:** public  
+
+**Database:** PostgreSQL 18
+**Schema:** public
 
 ---
 
 ## Table: `online_retail` (Raw)
 
-Original table loaded directly from the UCI Online Retail dataset without any modifications.
+Original table loaded from the UCI Online Retail dataset without analytical transformations.
 
 | Column | Data Type | Description | Example |
 |---|---|---|---|
-| `invoice_no` | VARCHAR(20) | Unique invoice identifier. Prefix 'C' indicates a cancellation/return | 536365, C536379 |
-| `stock_code` | VARCHAR(20) | Unique product/item code | 85123A |
+| `invoice_no` | VARCHAR(20) | Invoice identifier. Prefix `C` indicates a cancellation/return | 536365, C536379 |
+| `stock_code` | VARCHAR(20) | Product/item code | 85123A |
 | `description` | VARCHAR(255) | Product name/description | WHITE HANGING HEART T-LIGHT HOLDER |
-| `quantity` | INTEGER | Number of units per transaction. Negative = return | 6, -1 |
+| `quantity` | INTEGER | Number of units in the transaction. Negative values represent returns | 6, -1 |
 | `invoice_date` | TIMESTAMP | Date and time the transaction was generated | 2010-12-01 08:26:00 |
 | `unit_price` | NUMERIC(10,2) | Price per unit in GBP (£) | 2.55 |
-| `customer_id` | VARCHAR(20) | Unique identifier for each customer. NULL = guest/unregistered | 17850 |
-| `country` | VARCHAR(50) | Country where the customer resides | United Kingdom |
+| `customer_id` | BIGINT | Unique customer identifier. NULL indicates an unregistered/guest transaction | 17850 |
+| `country` | VARCHAR(50) | Country associated with the customer | United Kingdom |
 
-**Raw row count:** ~541,909  
+**Raw row count:** 541,909
 
 ---
 
 ## Table: `online_retail_clean` (Cleaned)
 
-Derived from `online_retail` after applying data quality filters. This is the primary table used in all analysis modules.
+Derived from `online_retail` after applying data-quality filters. This is the primary table used for analytical queries.
 
 | Column | Data Type | Description | Example |
 |---|---|---|---|
-| `invoice_no` | VARCHAR(20) | Unique invoice identifier (cancellations removed) | 536365 |
-| `stock_code` | VARCHAR(20) | Unique product/item code | 85123A |
+| `invoice_no` | VARCHAR(20) | Invoice identifier; cancellation invoices removed | 536365 |
+| `stock_code` | VARCHAR(20) | Product/item code | 85123A |
 | `description` | VARCHAR(255) | Product name/description | WHITE HANGING HEART T-LIGHT HOLDER |
-| `quantity` | INTEGER | Units per transaction (negatives removed) | 6 |
+| `quantity` | INTEGER | Positive units per transaction | 6 |
 | `invoice_date` | TIMESTAMP | Date and time of transaction | 2010-12-01 08:26:00 |
-| `unit_price` | NUMERIC(10,2) | Price per unit in GBP (£) | 2.55 |
-| `customer_id` | VARCHAR(20) | Unique customer identifier (NULLs removed) | 17850 |
-| `country` | VARCHAR(50) | Country where the customer resides | United Kingdom |
-| `revenue` | NUMERIC(10,2) | Derived column: `quantity * unit_price` | 15.30 |
+| `unit_price` | NUMERIC(10,2) | Positive price per unit in GBP (£) | 2.55 |
+| `customer_id` | BIGINT | Customer identifier; NULL values removed | 17850 |
+| `country` | VARCHAR(50) | Country associated with the customer | United Kingdom |
+| `revenue` | NUMERIC(10,2) | Derived revenue: `quantity * unit_price` | 15.30 |
 
 **Cleaning rules applied:**
-- Removed rows where `customer_id IS NULL`
-- Removed rows where `quantity < 0` (returns and cancellations)
-- Added `revenue` as a derived column
 
-**Clean row count:** ~397,882  
+- Removed rows where `customer_id IS NULL`
+- Removed rows where `quantity <= 0`
+- Removed rows where `unit_price <= 0`
+- Removed cancellation invoices where `invoice_no LIKE 'C%'`
+- Added `revenue` as a derived column: `quantity * unit_price`
+
+**Clean row count:** 397,880
 
 ---
 
 ## Derived Fields (Used in Analysis)
 
-These fields are not stored as columns — they are computed inside CTEs during analysis.
+These fields are computed inside CTEs during analysis and are not stored as physical columns in the cleaned table.
 
 | Field | Derived From | Logic | Used In |
 |---|---|---|---|
-| `recency_days` | `invoice_date` | Days between customer's last purchase and dataset max date | RFM Analysis |
+| `recency_days` | `invoice_date` | Days between customer's last purchase and dataset reference date | RFM Analysis |
 | `frequency` | `invoice_no` | `COUNT(DISTINCT invoice_no)` per customer | RFM Analysis |
 | `monetary` | `revenue` | `SUM(revenue)` per customer | RFM Analysis |
-| `r_score` | `recency_days` | `NTILE(5) ORDER BY recency_days ASC` — score 1 = most recent | RFM Analysis |
-| `f_score` | `frequency` | `NTILE(5) ORDER BY frequency DESC` — score 1 = most frequent | RFM Analysis |
-| `m_score` | `monetary` | `NTILE(5) ORDER BY monetary DESC` — score 1 = highest spend | RFM Analysis |
-| `customer_segment` | `r_score, f_score, m_score` | Multi-dimensional CASE logic | RFM Analysis |
-| `growth_pct` | `monthly_revenue` | `(current - previous) / previous * 100` using LAG() | Revenue Analysis |
+| `r_score` | `recency_days` | `NTILE(5) OVER (ORDER BY recency_days ASC)` — score 1 = most recent | RFM Analysis |
+| `f_score` | `frequency` | `NTILE(5) OVER (ORDER BY frequency DESC)` — score 1 = most frequent | RFM Analysis |
+| `m_score` | `monetary` | `NTILE(5) OVER (ORDER BY monetary DESC)` — score 1 = highest spender | RFM Analysis |
+| `customer_segment` | `r_score`, `f_score`, `m_score` | Multi-dimensional `CASE` logic | RFM Analysis |
+| `growth_pct` | `monthly_revenue` | `(current - previous) / previous * 100` using `LAG()` | Revenue Analysis |
 
 ---
 
 ## RFM Score Reference
 
-**Important:** In this project, lower scores = better customers (score 1 = best, score 5 = worst).  
-This is because NTILE orders recency ASC (fewer days = better = score 1) and frequency/monetary DESC (higher = better = score 1).
+**Important:** In this project, lower scores represent better customers (score 1 = best, score 5 = worst).
+
+This is because:
+
+- Recency is ordered ascending: fewer days since purchase = better = score 1
+- Frequency is ordered descending: more orders = better = score 1
+- Monetary value is ordered descending: higher spend = better = score 1
 
 | Score | Recency Meaning | Frequency Meaning | Monetary Meaning |
 |---|---|---|---|
@@ -86,26 +95,38 @@ This is because NTILE orders recency ASC (fewer days = better = score 1) and fre
 
 | Segment | Logic | Business Meaning |
 |---|---|---|
-| Champions | `r<=2 AND f<=2 AND m<=2` | Recent, frequent, high spend — best customers |
-| Hibernating High Value | `r>=4 AND f<=2 AND m<=2` | High spend + frequent historically, but gone quiet |
-| Loyal | `f<=2 AND m<=3` | Frequent buyers with decent spend |
-| Promising | `r<=2 AND f>=4` | Recently active but low frequency — new or occasional |
-| At Risk | `r>=4 AND f<=3 AND m BETWEEN 3 AND 4` | Moderate customers going quiet |
-| Low Value | Everything else | Low engagement, low spend |
+| Champions | `r_score <= 2 AND f_score <= 2 AND m_score <= 2` | Recent, frequent, high-spend customers |
+| Hibernating High Value | `r_score >= 4 AND f_score <= 2 AND m_score <= 2` | Historically frequent, high-spend customers who have gone inactive |
+| Loyal | `f_score <= 2 AND m_score <= 3` | Frequent buyers with relatively strong spending |
+| Promising | `r_score <= 2 AND f_score >= 4` | Recently active customers with low purchase frequency |
+| At Risk | `r_score >= 4 AND f_score <= 3 AND m_score BETWEEN 3 AND 4` | Moderate-value customers showing signs of inactivity |
+| Low Value | Everything else | Lower-engagement and lower-value customers |
 
 ---
 
 ## Data Quality Notes
 
-| Issue | Volume | Resolution |
-|---|---|---|
-| NULL customer_id | ~135,080 rows | Removed — cannot attribute to a customer |
-| Negative quantity (returns) | ~10,624 rows | Removed — distorts revenue figures |
-| Zero unit_price | Small number | Retained — may be samples or internal transfers |
-| Duplicate invoice lines | Normal | Expected — one invoice can have multiple products |
+| Issue | Resolution |
+|---|---|
+| NULL `customer_id` | Removed from the analytical table |
+| Non-positive `quantity` | Removed from the analytical table |
+| Non-positive `unit_price` | Removed from the analytical table |
+| Cancellation invoices (`C%`) | Removed from the analytical table |
+| Duplicate invoice lines | Retained; an invoice can contain multiple product lines |
+
+The cleaned dataset was validated after processing:
+
+- Clean rows: **397,880**
+- NULL customer IDs: **0**
+- Non-positive quantities: **0**
+- Non-positive unit prices: **0**
+- Cancellation invoices: **0**
+- Non-positive revenue values: **0**
 
 ---
 
-*Source: UCI Machine Learning Repository — Online Retail Dataset*  
-*Period: 01 Dec 2010 – 09 Dec 2011*  
-*Currency: GBP (£)*
+**Source:** UCI Machine Learning Repository — Online Retail Dataset
+
+**Period:** 01 Dec 2010 – 09 Dec 2011
+
+**Currency:** GBP (£)
